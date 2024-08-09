@@ -25,7 +25,7 @@
 #include "common/type_c.h"
 #include "pb/plan.pb.h"
 #include "segcore/Collection.h"
-#include "segcore/Reduce.h"
+#include "segcore/reduce/Reduce.h"
 #include "segcore/reduce_c.h"
 #include "segcore/segment_c.h"
 #include "futures/Future.h"
@@ -86,14 +86,14 @@ generate_query_data(int nq) {
     return blob;
 }
 void
-CheckSearchResultDuplicate(const std::vector<CSearchResult>& results) {
+CheckSearchResultDuplicate(const std::vector<CSearchResult>& results,
+                           int group_size = 1) {
     auto nq = ((SearchResult*)results[0])->total_nq_;
-
     std::unordered_set<PkType> pk_set;
-    std::unordered_set<GroupByValueType> group_by_val_set;
+    std::unordered_map<GroupByValueType, int> group_by_map;
     for (int qi = 0; qi < nq; qi++) {
         pk_set.clear();
-        group_by_val_set.clear();
+        group_by_map.clear();
         for (size_t i = 0; i < results.size(); i++) {
             auto search_result = (SearchResult*)results[i];
             ASSERT_EQ(nq, search_result->total_nq_);
@@ -108,8 +108,8 @@ CheckSearchResultDuplicate(const std::vector<CSearchResult>& results) {
                     search_result->group_by_values_.value().size() > ki) {
                     auto group_by_val =
                         search_result->group_by_values_.value()[ki];
-                    ASSERT_TRUE(group_by_val_set.count(group_by_val) == 0);
-                    group_by_val_set.insert(group_by_val);
+                    group_by_map[group_by_val] += 1;
+                    ASSERT_TRUE(group_by_map[group_by_val] <= group_size);
                 }
             }
         }
@@ -119,25 +119,57 @@ CheckSearchResultDuplicate(const std::vector<CSearchResult>& results) {
 const char*
 get_default_schema_config() {
     static std::string conf = R"(name: "default-collection"
-                            fields: <
-                              fieldID: 100
-                              name: "fakevec"
-                              data_type: FloatVector
-                              type_params: <
-                                key: "dim"
-                                value: "16"
-                              >
-                              index_params: <
-                                key: "metric_type"
-                                value: "L2"
-                              >
-                            >
-                            fields: <
-                              fieldID: 101
-                              name: "age"
-                              data_type: Int64
-                              is_primary_key: true
-                            >)";
+                                fields: <
+                                  fieldID: 100
+                                  name: "fakevec"
+                                  data_type: FloatVector
+                                  type_params: <
+                                    key: "dim"
+                                    value: "16"
+                                  >
+                                  index_params: <
+                                    key: "metric_type"
+                                    value: "L2"
+                                  >
+                                >
+                                fields: <
+                                  fieldID: 101
+                                  name: "age"
+                                  data_type: Int64
+                                  is_primary_key: true
+                                >)";
+    static std::string fake_conf = "";
+    return conf.c_str();
+}
+
+const char*
+get_default_schema_config_nullable() {
+    static std::string conf = R"(name: "default-collection"
+                                fields: <
+                                  fieldID: 100
+                                  name: "fakevec"
+                                  data_type: FloatVector
+                                  type_params: <
+                                    key: "dim"
+                                    value: "16"
+                                  >
+                                  index_params: <
+                                    key: "metric_type"
+                                    value: "L2"
+                                  >
+                                >
+                                fields: <
+                                  fieldID: 101
+                                  name: "age"
+                                  data_type: Int64
+                                  is_primary_key: true
+                                >
+                                fields: <
+                                  fieldID: 102
+                                  name: "nullable"
+                                  data_type: Int32
+                                  nullable:true
+                                >)";
     static std::string fake_conf = "";
     return conf.c_str();
 }

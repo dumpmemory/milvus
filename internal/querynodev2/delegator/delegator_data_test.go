@@ -1159,8 +1159,7 @@ func (s *DelegatorDataSuite) TestLevel0Deletions() {
 
 	delegator.segmentManager.Put(context.TODO(), segments.SegmentTypeSealed, l0Global)
 	pks, _ = delegator.GetLevel0Deletions(partitionID, pkoracle.NewCandidateKey(l0.ID(), l0.Partition(), segments.SegmentTypeGrowing))
-	s.True(pks[0].EQ(partitionDeleteData.Pks[0]))
-	s.True(pks[1].EQ(allPartitionDeleteData.Pks[0]))
+	s.ElementsMatch(pks, []storage.PrimaryKey{partitionDeleteData.Pks[0], allPartitionDeleteData.Pks[0]})
 
 	bfs := pkoracle.NewBloomFilterSet(3, l0.Partition(), commonpb.SegmentState_Sealed)
 	bfs.UpdateBloomFilter(allPartitionDeleteData.Pks)
@@ -1199,10 +1198,10 @@ func (s *DelegatorDataSuite) TestReadDeleteFromMsgstream() {
 
 	datas := []*msgstream.MsgPack{
 		{EndTs: 10, EndPositions: []*msgpb.MsgPosition{{Timestamp: 10}}, Msgs: []msgstream.TsMsg{
-			&msgstream.DeleteMsg{DeleteRequest: msgpb.DeleteRequest{Base: baseMsg, CollectionID: s.collectionID, PartitionID: 1, PrimaryKeys: storage.ParseInt64s2IDs(1), Timestamps: []uint64{1}}},
-			&msgstream.DeleteMsg{DeleteRequest: msgpb.DeleteRequest{Base: baseMsg, CollectionID: s.collectionID, PartitionID: -1, PrimaryKeys: storage.ParseInt64s2IDs(2), Timestamps: []uint64{5}}},
+			&msgstream.DeleteMsg{DeleteRequest: &msgpb.DeleteRequest{Base: baseMsg, CollectionID: s.collectionID, PartitionID: 1, PrimaryKeys: storage.ParseInt64s2IDs(1), Timestamps: []uint64{1}}},
+			&msgstream.DeleteMsg{DeleteRequest: &msgpb.DeleteRequest{Base: baseMsg, CollectionID: s.collectionID, PartitionID: -1, PrimaryKeys: storage.ParseInt64s2IDs(2), Timestamps: []uint64{5}}},
 			// invalid msg because partition wrong
-			&msgstream.DeleteMsg{DeleteRequest: msgpb.DeleteRequest{Base: baseMsg, CollectionID: s.collectionID, PartitionID: 2, PrimaryKeys: storage.ParseInt64s2IDs(1), Timestamps: []uint64{10}}},
+			&msgstream.DeleteMsg{DeleteRequest: &msgpb.DeleteRequest{Base: baseMsg, CollectionID: s.collectionID, PartitionID: 2, PrimaryKeys: storage.ParseInt64s2IDs(1), Timestamps: []uint64{10}}},
 		}},
 	}
 

@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -63,14 +64,31 @@ func GetIP(ip string) string {
 func GetLocalIP() string {
 	addrs, err := net.InterfaceAddrs()
 	if err == nil {
-		for _, addr := range addrs {
-			ipaddr, ok := addr.(*net.IPNet)
-			if ok && ipaddr.IP.IsGlobalUnicast() && ipaddr.IP.To4() != nil {
-				return ipaddr.IP.String()
-			}
+		ip := GetValidLocalIP(addrs)
+		if len(ip) != 0 {
+			return ip
 		}
 	}
 	return "127.0.0.1"
+}
+
+// GetValidLocalIP return the first valid local ip address
+func GetValidLocalIP(addrs []net.Addr) string {
+	// Search for valid ipv4 addresses
+	for _, addr := range addrs {
+		ipaddr, ok := addr.(*net.IPNet)
+		if ok && ipaddr.IP.IsGlobalUnicast() && ipaddr.IP.To4() != nil {
+			return ipaddr.IP.String()
+		}
+	}
+	// Search for valid ipv6 addresses
+	for _, addr := range addrs {
+		ipaddr, ok := addr.(*net.IPNet)
+		if ok && ipaddr.IP.IsGlobalUnicast() && ipaddr.IP.To16() != nil && ipaddr.IP.To4() == nil {
+			return "[" + ipaddr.IP.String() + "]"
+		}
+	}
+	return ""
 }
 
 // JSONToMap parse the jsonic index parameters to map
@@ -211,7 +229,11 @@ func GetAvailablePort() int {
 
 // IsPhysicalChannel checks if the channel is a physical channel
 func IsPhysicalChannel(channel string) bool {
-	return strings.Count(channel, "_") == 1
+	i := strings.LastIndex(channel, "_")
+	if i == -1 {
+		return true
+	}
+	return !strings.Contains(channel[i+1:], "v")
 }
 
 // ToPhysicalChannel get physical channel name from virtual channel name
@@ -226,6 +248,10 @@ func ToPhysicalChannel(vchannel string) string {
 	return vchannel[:index]
 }
 
+func GetVirtualChannel(pchannel string, collectionID int64, idx int) string {
+	return fmt.Sprintf("%s_%dv%d", pchannel, collectionID, idx)
+}
+
 // ConvertChannelName assembles channel name according to parameters.
 func ConvertChannelName(chanName string, tokenFrom string, tokenTo string) (string, error) {
 	if tokenFrom == "" {
@@ -235,6 +261,18 @@ func ConvertChannelName(chanName string, tokenFrom string, tokenTo string) (stri
 		return "", fmt.Errorf("cannot find token '%s' in '%s'", tokenFrom, chanName)
 	}
 	return strings.Replace(chanName, tokenFrom, tokenTo, 1), nil
+}
+
+func GetCollectionIDFromVChannel(vChannelName string) int64 {
+	re := regexp.MustCompile(`.*_(\d+)v\d+`)
+	matches := re.FindStringSubmatch(vChannelName)
+	if len(matches) > 1 {
+		number, err := strconv.ParseInt(matches[1], 0, 64)
+		if err == nil {
+			return number
+		}
+	}
+	return -1
 }
 
 func getNumRowsOfScalarField(datas interface{}) uint64 {

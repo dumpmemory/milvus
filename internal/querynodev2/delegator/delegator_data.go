@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"math/rand"
 	"runtime"
-	"sort"
 	"time"
 
 	"github.com/cockroachdb/errors"
@@ -593,10 +592,6 @@ func (sd *shardDelegator) GetLevel0Deletions(partitionID int64, candidate pkorac
 		}
 	}
 
-	sort.Slice(pks, func(i, j int) bool {
-		return tss[i] < tss[j]
-	})
-
 	return pks, tss
 }
 
@@ -651,6 +646,16 @@ func (sd *shardDelegator) loadStreamDelete(ctx context.Context,
 			position = deltaPositions[0]
 		}
 
+		// after L0 segment feature
+		// growing segemnts should have load stream delete as well
+		deleteScope := querypb.DataScope_All
+		switch candidate.Type() {
+		case commonpb.SegmentState_Sealed:
+			deleteScope = querypb.DataScope_Historical
+		case commonpb.SegmentState_Growing:
+			deleteScope = querypb.DataScope_Streaming
+		}
+
 		deletedPks, deletedTss := sd.GetLevel0Deletions(candidate.Partition(), candidate)
 		deleteData := &storage.DeleteData{}
 		deleteData.AppendBatch(deletedPks, deletedTss)
@@ -665,7 +670,7 @@ func (sd *shardDelegator) loadStreamDelete(ctx context.Context,
 				SegmentId:    info.GetSegmentID(),
 				PrimaryKeys:  storage.ParsePrimaryKeys2IDs(deleteData.Pks),
 				Timestamps:   deleteData.Tss,
-				Scope:        querypb.DataScope_Historical, // only sealed segment need to loadStreamDelete
+				Scope:        deleteScope,
 			})
 			if err != nil {
 				log.Warn("failed to apply delete when LoadSegment", zap.Error(err))
@@ -723,6 +728,7 @@ func (sd *shardDelegator) loadStreamDelete(ctx context.Context,
 				SegmentId:    info.GetSegmentID(),
 				PrimaryKeys:  storage.ParsePrimaryKeys2IDs(deleteData.Pks),
 				Timestamps:   deleteData.Tss,
+				Scope:        deleteScope,
 			})
 			if err != nil {
 				log.Warn("failed to apply delete when LoadSegment", zap.Error(err))

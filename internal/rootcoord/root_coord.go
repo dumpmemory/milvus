@@ -528,7 +528,7 @@ func (c *Core) initCredentials() error {
 	credInfo, _ := c.meta.GetCredential(util.UserRoot)
 	if credInfo == nil {
 		log.Debug("RootCoord init user root")
-		encryptedRootPassword, _ := crypto.PasswordEncrypt(util.DefaultRootPassword)
+		encryptedRootPassword, _ := crypto.PasswordEncrypt(Params.CommonCfg.DefaultRootPassword.GetValue())
 		err := c.meta.AddCredential(&internalpb.CredentialInfo{Username: util.UserRoot, EncryptedPassword: encryptedRootPassword})
 		return err
 	}
@@ -655,7 +655,7 @@ func (c *Core) restore(ctx context.Context) error {
 				for _, part := range coll.Partitions {
 					switch part.State {
 					case pb.PartitionState_PartitionDropping:
-						go c.garbageCollector.ReDropPartition(coll.DBID, coll.PhysicalChannelNames, part.Clone(), ts)
+						go c.garbageCollector.ReDropPartition(coll.DBID, coll.PhysicalChannelNames, coll.VirtualChannelNames, part.Clone(), ts)
 					case pb.PartitionState_PartitionCreating:
 						go c.garbageCollector.RemoveCreatingPartition(coll.DBID, part.Clone(), ts)
 					default:
@@ -1566,6 +1566,16 @@ func (c *Core) ShowSegments(ctx context.Context, in *milvuspb.ShowSegmentsReques
 	// ShowSegments Only used in GetPersistentSegmentInfo, it's already deprecated for a long time.
 	// Though we continue to keep current logic, it's not right enough since RootCoord only contains indexed segments.
 	return &milvuspb.ShowSegmentsResponse{Status: merr.Success()}, nil
+}
+
+// GetPChannelInfo get pchannel info.
+func (c *Core) GetPChannelInfo(ctx context.Context, in *rootcoordpb.GetPChannelInfoRequest) (*rootcoordpb.GetPChannelInfoResponse, error) {
+	if err := merr.CheckHealthy(c.GetStateCode()); err != nil {
+		return &rootcoordpb.GetPChannelInfoResponse{
+			Status: merr.Status(err),
+		}, nil
+	}
+	return c.meta.GetPChannelInfo(in.GetPchannel()), nil
 }
 
 // AllocTimestamp alloc timestamp

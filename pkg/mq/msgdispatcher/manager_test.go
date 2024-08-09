@@ -74,6 +74,12 @@ func TestManager(t *testing.T) {
 		_, err = c.Add(ctx, "mock_vchannel_2", nil, common.SubscriptionPositionUnknown)
 		assert.NoError(t, err)
 		assert.Equal(t, 3, c.Num())
+		c.(*dispatcherManager).mainDispatcher.curTs.Store(1000)
+		c.(*dispatcherManager).mu.RLock()
+		for _, d := range c.(*dispatcherManager).soloDispatchers {
+			d.curTs.Store(1000)
+		}
+		c.(*dispatcherManager).mu.RUnlock()
 
 		c.(*dispatcherManager).tryMerge()
 		assert.Equal(t, 1, c.Num())
@@ -99,6 +105,12 @@ func TestManager(t *testing.T) {
 		_, err = c.Add(ctx, "mock_vchannel_2", nil, common.SubscriptionPositionUnknown)
 		assert.NoError(t, err)
 		assert.Equal(t, 3, c.Num())
+		c.(*dispatcherManager).mainDispatcher.curTs.Store(1000)
+		c.(*dispatcherManager).mu.RLock()
+		for _, d := range c.(*dispatcherManager).soloDispatchers {
+			d.curTs.Store(1000)
+		}
+		c.(*dispatcherManager).mu.RUnlock()
 
 		checkIntervalK := paramtable.Get().MQCfg.MergeCheckInterval.Key
 		paramtable.Get().Save(checkIntervalK, "0.01")
@@ -177,7 +189,7 @@ func (suite *SimulationSuite) SetupTest() {
 	go suite.manager.Run()
 }
 
-func (suite *SimulationSuite) produceMsg(wg *sync.WaitGroup) {
+func (suite *SimulationSuite) produceMsg(wg *sync.WaitGroup, collectionID int64) {
 	defer wg.Done()
 
 	const timeTickCount = 100
@@ -211,7 +223,7 @@ func (suite *SimulationSuite) produceMsg(wg *sync.WaitGroup) {
 		ddlNum := rand.Intn(2)
 		for j := 0; j < ddlNum; j++ {
 			err := suite.producer.Produce(&msgstream.MsgPack{
-				Msgs: []msgstream.TsMsg{genDDLMsg(commonpb.MsgType_DropCollection)},
+				Msgs: []msgstream.TsMsg{genDDLMsg(commonpb.MsgType_DropCollection, collectionID)},
 			})
 			assert.NoError(suite.T(), err)
 			for k := range suite.vchannels {
@@ -234,11 +246,9 @@ func (suite *SimulationSuite) produceMsg(wg *sync.WaitGroup) {
 func (suite *SimulationSuite) consumeMsg(ctx context.Context, wg *sync.WaitGroup, vchannel string) {
 	defer wg.Done()
 	var lastTs typeutil.Timestamp
-	timeoutCtx, cancel := context.WithTimeout(ctx, 5000*time.Millisecond)
-	defer cancel()
 	for {
 		select {
-		case <-timeoutCtx.Done():
+		case <-ctx.Done():
 			return
 		case pack := <-suite.vchannels[vchannel].output:
 			assert.Greater(suite.T(), pack.EndTs, lastTs)
@@ -262,7 +272,7 @@ func (suite *SimulationSuite) consumeMsg(ctx context.Context, wg *sync.WaitGroup
 
 func (suite *SimulationSuite) produceTimeTickOnly(ctx context.Context) {
 	tt := 1
-	ticker := time.NewTicker(10 * time.Millisecond)
+	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 	for {
 		select {
@@ -280,10 +290,16 @@ func (suite *SimulationSuite) produceTimeTickOnly(ctx context.Context) {
 }
 
 func (suite *SimulationSuite) TestDispatchToVchannels() {
-	const vchannelNum = 10
+	ctx, cancel := context.WithTimeout(context.Background(), 5000*time.Millisecond)
+	defer cancel()
+
+	const (
+		vchannelNum        = 10
+		collectionID int64 = 1234
+	)
 	suite.vchannels = make(map[string]*vchannelHelper, vchannelNum)
 	for i := 0; i < vchannelNum; i++ {
-		vchannel := fmt.Sprintf("%s_vchannelv%d", suite.pchannel, i)
+		vchannel := fmt.Sprintf("%s_%dv%d", suite.pchannel, collectionID, i)
 		output, err := suite.manager.Add(context.Background(), vchannel, nil, common.SubscriptionPositionEarliest)
 		assert.NoError(suite.T(), err)
 		suite.vchannels[vchannel] = &vchannelHelper{output: output}
@@ -291,18 +307,19 @@ func (suite *SimulationSuite) TestDispatchToVchannels() {
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-	go suite.produceMsg(wg)
+	go suite.produceMsg(wg, collectionID)
 	wg.Wait()
 	for vchannel := range suite.vchannels {
 		wg.Add(1)
-		go suite.consumeMsg(context.Background(), wg, vchannel)
+		go suite.consumeMsg(ctx, wg, vchannel)
 	}
 	wg.Wait()
-	for _, helper := range suite.vchannels {
-		assert.Equal(suite.T(), helper.pubInsMsgNum, helper.subInsMsgNum)
-		assert.Equal(suite.T(), helper.pubDelMsgNum, helper.subDelMsgNum)
-		assert.Equal(suite.T(), helper.pubDDLMsgNum, helper.subDDLMsgNum)
-		assert.Equal(suite.T(), helper.pubPackNum, helper.subPackNum)
+	for vchannel, helper := range suite.vchannels {
+		msg := fmt.Sprintf("vchannel=%s", vchannel)
+		assert.Equal(suite.T(), helper.pubInsMsgNum, helper.subInsMsgNum, msg)
+		assert.Equal(suite.T(), helper.pubDelMsgNum, helper.subDelMsgNum, msg)
+		assert.Equal(suite.T(), helper.pubDDLMsgNum, helper.subDDLMsgNum, msg)
+		assert.Equal(suite.T(), helper.pubPackNum, helper.subPackNum, msg)
 	}
 }
 
@@ -332,7 +349,7 @@ func (suite *SimulationSuite) TestMerge() {
 	suite.Eventually(func() bool {
 		suite.T().Logf("dispatcherManager.dispatcherNum = %d", suite.manager.Num())
 		return suite.manager.Num() == 1 // expected all merged, only mainDispatcher exist
-	}, 10*time.Second, 100*time.Millisecond)
+	}, 15*time.Second, 100*time.Millisecond)
 
 	cancel()
 	wg.Wait()

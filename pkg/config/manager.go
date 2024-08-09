@@ -119,7 +119,7 @@ func (m *Manager) CASCachedValue(key string, origin string, value interface{}) b
 	m.cacheMutex.Lock()
 	defer m.cacheMutex.Unlock()
 	current, err := m.GetConfig(key)
-	if err != nil {
+	if err != nil && !errors.Is(err, ErrKeyNotFound) {
 		return false
 	}
 	if current != origin {
@@ -139,8 +139,11 @@ func (m *Manager) EvictCacheValueByFormat(keys ...string) {
 	m.cacheMutex.Lock()
 	defer m.cacheMutex.Unlock()
 
-	for _, key := range keys {
-		delete(m.configCache, key)
+	set := typeutil.NewSet(keys...)
+	for key := range m.configCache {
+		if set.Contain(formatKey(key)) {
+			delete(m.configCache, key)
+		}
 	}
 }
 
@@ -149,13 +152,13 @@ func (m *Manager) GetConfig(key string) (string, error) {
 	v, ok := m.overlays.Get(realKey)
 	if ok {
 		if v == TombValue {
-			return "", fmt.Errorf("key not found %s", key)
+			return "", errors.Wrap(ErrKeyNotFound, key) // fmt.Errorf("key not found %s", key)
 		}
 		return v, nil
 	}
 	sourceName, ok := m.keySourceMap.Get(realKey)
 	if !ok {
-		return "", fmt.Errorf("key not found: %s", key)
+		return "", errors.Wrap(ErrKeyNotFound, key) // fmt.Errorf("key not found: %s", key)
 	}
 	return m.getConfigValueBySource(realKey, sourceName)
 }

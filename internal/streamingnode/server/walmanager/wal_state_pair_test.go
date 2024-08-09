@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/milvus-io/milvus/internal/mocks/streamingnode/server/mock_wal"
-	"github.com/milvus-io/milvus/internal/proto/streamingpb"
 	"github.com/milvus-io/milvus/internal/util/streamingutil/status"
+	"github.com/milvus-io/milvus/pkg/streaming/proto/streamingpb"
 	"github.com/milvus-io/milvus/pkg/streaming/util/types"
 )
 
@@ -68,6 +68,12 @@ func TestStatePair(t *testing.T) {
 	case <-time.After(1 * time.Second):
 		t.Error("WaitCurrentStateReachExpected should not block")
 	}
+}
+
+func assertErrorOperationIgnored(t *testing.T, err error) {
+	assert.Error(t, err)
+	logErr := status.AsStreamingError(err)
+	assert.Equal(t, streamingpb.StreamingCode_STREAMING_CODE_IGNORED_OPERATION, logErr.Code)
 }
 
 func assertErrorTermExpired(t *testing.T, err error) {

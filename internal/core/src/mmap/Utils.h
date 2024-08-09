@@ -48,7 +48,7 @@ namespace milvus {
 constexpr size_t FILE_STRING_PADDING = 1;
 constexpr size_t FILE_ARRAY_PADDING = 1;
 
-inline size_t 
+inline size_t
 PaddingSize(const DataType& type) {
     switch (type) {
         case DataType::JSON:
@@ -67,12 +67,28 @@ PaddingSize(const DataType& type) {
 }
 
 inline void
+WriteFieldPadding(File& file, DataType data_type, uint64_t& total_written) {
+    // write padding 0 in file content directly
+    // see also https://github.com/milvus-io/milvus/issues/34442
+    auto padding_size = PaddingSize(data_type);
+    if (padding_size > 0) {
+        std::vector<char> padding(padding_size, 0);
+        ssize_t written = file.Write(padding.data(), padding_size);
+        if (written < padding_size) {
+            THROW_FILE_WRITE_ERROR
+        }
+        total_written += written;
+    }
+}
+
+inline void
 WriteFieldData(File& file,
                DataType data_type,
                const FieldDataPtr& data,
                uint64_t& total_written,
                std::vector<uint64_t>& indices,
-               std::vector<std::vector<uint64_t>>& element_indices) {
+               std::vector<std::vector<uint64_t>>& element_indices,
+               FixedVector<bool>& valid_data) {
     if (IsVariableDataType(data_type)) {
         switch (data_type) {
             case DataType::VARCHAR:
@@ -133,11 +149,18 @@ WriteFieldData(File& file,
                 break;
             }
             case DataType::VECTOR_SPARSE_FLOAT: {
-                // TODO(SPARSE): this is for mmap to write data to disk so that
-                // the file can be mmaped into memory.
-                PanicInfo(
-                    ErrorCode::NotImplemented,
-                    "WriteFieldData for VECTOR_SPARSE_FLOAT not implemented");
+                for (size_t i = 0; i < data->get_num_rows(); ++i) {
+                    auto vec =
+                        static_cast<const knowhere::sparse::SparseRow<float>*>(
+                            data->RawValue(i));
+                    ssize_t written =
+                        file.Write(vec->data(), vec->data_byte_size());
+                    if (written < vec->data_byte_size()) {
+                        break;
+                    }
+                    total_written += written;
+                }
+                break;
             }
             default:
                 PanicInfo(DataTypeInvalid,
@@ -146,26 +169,23 @@ WriteFieldData(File& file,
         }
     } else {
         // write as: data|data|data|data|data|data......
-        size_t written = file.Write(data->Data(), data->Size());
-        if (written < data->Size()) {
+        size_t written = file.Write(data->Data(), data->DataSize());
+        if (written < data->DataSize()) {
             THROW_FILE_WRITE_ERROR
         }
         for (auto i = 0; i < data->get_num_rows(); i++) {
             indices.emplace_back(total_written);
-            total_written += data->Size(i);
+            total_written += data->DataSize(i);
         }
     }
-
-    // write padding 0 in file content directly
-    // see also https://github.com/milvus-io/milvus/issues/34442
-    auto padding_size = PaddingSize(data_type);
-    if (padding_size > 0 ) {
-        std::vector<char> padding(padding_size, 0);
-        ssize_t written = file.Write(padding.data(), padding_size);
-        if (written < padding_size) {
-            THROW_FILE_WRITE_ERROR
+    if (data->IsNullable()) {
+        size_t required_rows = valid_data.size() + data->get_num_rows();
+        if (required_rows > valid_data.size()) {
+            valid_data.reserve(required_rows * 2);
         }
-        total_written += written;
+        for (size_t i = 0; i < data->get_num_rows(); i++) {
+            valid_data.push_back(data->is_valid(i));
+        }
     }
 }
 }  // namespace milvus

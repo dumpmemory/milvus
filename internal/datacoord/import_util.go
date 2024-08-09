@@ -200,10 +200,8 @@ func AssembleImportRequest(task ImportTask, job ImportJob, meta *meta, alloc all
 		return stat.GetTotalRows()
 	})
 
-	var (
-		// Allocated IDs are used for rowID and the BEGINNING of the logID.
-		allocNum = totalRows + 1
-	)
+	// Allocated IDs are used for rowID and the BEGINNING of the logID.
+	allocNum := totalRows + 1
 
 	idBegin, idEnd, err := alloc.allocN(allocNum)
 	if err != nil {
@@ -223,18 +221,25 @@ func AssembleImportRequest(task ImportTask, job ImportJob, meta *meta, alloc all
 		Files:           importFiles,
 		Options:         job.GetOptions(),
 		Ts:              ts,
-		AutoIDRange:     &datapb.AutoIDRange{Begin: idBegin, End: idEnd},
+		IDRange:         &datapb.IDRange{Begin: idBegin, End: idEnd},
 		RequestSegments: requestSegments,
 	}, nil
 }
 
-func RegroupImportFiles(job ImportJob, files []*datapb.ImportFileStats) [][]*datapb.ImportFileStats {
+func RegroupImportFiles(job ImportJob, files []*datapb.ImportFileStats, allDiskIndex bool) [][]*datapb.ImportFileStats {
 	if len(files) == 0 {
 		return nil
 	}
 
+	var segmentMaxSize int
+	if allDiskIndex {
+		// Only if all vector fields index type are DiskANN, recalc segment max size here.
+		segmentMaxSize = Params.DataCoordCfg.DiskSegmentMaxSize.GetAsInt() * 1024 * 1024
+	} else {
+		// If some vector fields index type are not DiskANN, recalc segment max size using default policy.
+		segmentMaxSize = Params.DataCoordCfg.SegmentMaxSize.GetAsInt() * 1024 * 1024
+	}
 	isL0Import := importutilv2.IsL0Import(job.GetOptions())
-	segmentMaxSize := paramtable.Get().DataCoordCfg.SegmentMaxSize.GetAsInt() * 1024 * 1024
 	if isL0Import {
 		segmentMaxSize = paramtable.Get().DataNodeCfg.FlushDeleteBufferBytes.GetAsInt()
 	}
@@ -274,6 +279,10 @@ func CheckDiskQuota(job ImportJob, meta *meta, imeta ImportMeta) (int64, error) 
 	if !Params.QuotaConfig.DiskProtectionEnabled.GetAsBool() {
 		return 0, nil
 	}
+	if importutilv2.SkipDiskQuotaCheck(job.GetOptions()) {
+		log.Info("skip disk quota check for import", zap.Int64("jobID", job.GetJobID()))
+		return 0, nil
+	}
 
 	var (
 		requestedTotal       int64
@@ -286,7 +295,8 @@ func CheckDiskQuota(job ImportJob, meta *meta, imeta ImportMeta) (int64, error) 
 	}
 
 	err := merr.WrapErrServiceQuotaExceeded("disk quota exceeded, please allocate more resources")
-	totalUsage, collectionsUsage, _ := meta.GetCollectionBinlogSize()
+	quotaInfo := meta.GetQuotaInfo()
+	totalUsage, collectionsUsage := quotaInfo.TotalBinlogSize, quotaInfo.CollectionBinlogSize
 
 	tasks := imeta.GetTaskBy(WithJob(job.GetJobID()), WithType(PreImportTaskType))
 	files := make([]*datapb.ImportFileStats, 0)

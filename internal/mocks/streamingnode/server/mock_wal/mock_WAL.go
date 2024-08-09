@@ -116,6 +116,49 @@ func (_c *MockWAL_AppendAsync_Call) RunAndReturn(run func(context.Context, messa
 	return _c
 }
 
+// Available provides a mock function with given fields:
+func (_m *MockWAL) Available() <-chan struct{} {
+	ret := _m.Called()
+
+	var r0 <-chan struct{}
+	if rf, ok := ret.Get(0).(func() <-chan struct{}); ok {
+		r0 = rf()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(<-chan struct{})
+		}
+	}
+
+	return r0
+}
+
+// MockWAL_Available_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Available'
+type MockWAL_Available_Call struct {
+	*mock.Call
+}
+
+// Available is a helper method to define mock.On call
+func (_e *MockWAL_Expecter) Available() *MockWAL_Available_Call {
+	return &MockWAL_Available_Call{Call: _e.mock.On("Available")}
+}
+
+func (_c *MockWAL_Available_Call) Run(run func()) *MockWAL_Available_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockWAL_Available_Call) Return(_a0 <-chan struct{}) *MockWAL_Available_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockWAL_Available_Call) RunAndReturn(run func() <-chan struct{}) *MockWAL_Available_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Channel provides a mock function with given fields:
 func (_m *MockWAL) Channel() types.PChannelInfo {
 	ret := _m.Called()
@@ -189,6 +232,47 @@ func (_c *MockWAL_Close_Call) RunAndReturn(run func()) *MockWAL_Close_Call {
 	return _c
 }
 
+// IsAvailable provides a mock function with given fields:
+func (_m *MockWAL) IsAvailable() bool {
+	ret := _m.Called()
+
+	var r0 bool
+	if rf, ok := ret.Get(0).(func() bool); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+
+	return r0
+}
+
+// MockWAL_IsAvailable_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'IsAvailable'
+type MockWAL_IsAvailable_Call struct {
+	*mock.Call
+}
+
+// IsAvailable is a helper method to define mock.On call
+func (_e *MockWAL_Expecter) IsAvailable() *MockWAL_IsAvailable_Call {
+	return &MockWAL_IsAvailable_Call{Call: _e.mock.On("IsAvailable")}
+}
+
+func (_c *MockWAL_IsAvailable_Call) Run(run func()) *MockWAL_IsAvailable_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockWAL_IsAvailable_Call) Return(_a0 bool) *MockWAL_IsAvailable_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockWAL_IsAvailable_Call) RunAndReturn(run func() bool) *MockWAL_IsAvailable_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Read provides a mock function with given fields: ctx, deliverPolicy
 func (_m *MockWAL) Read(ctx context.Context, deliverPolicy wal.ReadOption) (wal.Scanner, error) {
 	ret := _m.Called(ctx, deliverPolicy)
@@ -240,6 +324,47 @@ func (_c *MockWAL_Read_Call) Return(_a0 wal.Scanner, _a1 error) *MockWAL_Read_Ca
 }
 
 func (_c *MockWAL_Read_Call) RunAndReturn(run func(context.Context, wal.ReadOption) (wal.Scanner, error)) *MockWAL_Read_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// WALName provides a mock function with given fields:
+func (_m *MockWAL) WALName() string {
+	ret := _m.Called()
+
+	var r0 string
+	if rf, ok := ret.Get(0).(func() string); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+
+	return r0
+}
+
+// MockWAL_WALName_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'WALName'
+type MockWAL_WALName_Call struct {
+	*mock.Call
+}
+
+// WALName is a helper method to define mock.On call
+func (_e *MockWAL_Expecter) WALName() *MockWAL_WALName_Call {
+	return &MockWAL_WALName_Call{Call: _e.mock.On("WALName")}
+}
+
+func (_c *MockWAL_WALName_Call) Run(run func()) *MockWAL_WALName_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockWAL_WALName_Call) Return(_a0 string) *MockWAL_WALName_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockWAL_WALName_Call) RunAndReturn(run func() string) *MockWAL_WALName_Call {
 	_c.Call.Return(run)
 	return _c
 }

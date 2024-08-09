@@ -44,6 +44,8 @@ const (
 
 	// Sparse Index Param
 	SparseDropRatioBuild = "drop_ratio_build"
+
+	MaxBitmapCardinalityLimit = 1000
 )
 
 var (
@@ -64,7 +66,7 @@ var (
 )
 
 const (
-	FloatVectorDefaultMetricType       = metric.IP
+	FloatVectorDefaultMetricType       = metric.COSINE
 	SparseFloatVectorDefaultMetricType = metric.IP
-	BinaryVectorDefaultMetricType      = metric.JACCARD
+	BinaryVectorDefaultMetricType      = metric.HAMMING
 )

@@ -32,6 +32,7 @@ import (
 	"github.com/tikv/client-go/v2/txnkv"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
 
 	"github.com/milvus-io/milvus-proto/go-api/v2/commonpb"
 	"github.com/milvus-io/milvus/internal/datacoord/broker"
@@ -43,9 +44,11 @@ import (
 	"github.com/milvus-io/milvus/internal/metastore/kv/datacoord"
 	"github.com/milvus-io/milvus/internal/proto/datapb"
 	"github.com/milvus-io/milvus/internal/storage"
+	streamingcoord "github.com/milvus-io/milvus/internal/streamingcoord/server"
 	"github.com/milvus-io/milvus/internal/types"
 	"github.com/milvus-io/milvus/internal/util/dependency"
 	"github.com/milvus-io/milvus/internal/util/sessionutil"
+	"github.com/milvus-io/milvus/internal/util/streamingutil"
 	"github.com/milvus-io/milvus/pkg/kv"
 	"github.com/milvus-io/milvus/pkg/log"
 	"github.com/milvus-io/milvus/pkg/metrics"
@@ -122,7 +125,7 @@ type Server struct {
 
 	compactionTrigger        trigger
 	compactionHandler        compactionPlanContext
-	compactionTriggerManager *CompactionTriggerManager
+	compactionTriggerManager TriggerManager
 
 	syncSegmentsScheduler *SyncSegmentsScheduler
 	metricsCacheManager   *metricsinfo.MetricsCacheManager
@@ -155,6 +158,9 @@ type Server struct {
 
 	// manage ways that data coord access other coord
 	broker broker.Broker
+
+	// streamingcoord server is embedding in datacoord now.
+	streamingCoord *streamingcoord.Server
 }
 
 type CollectionNameInfo struct {
@@ -303,6 +309,11 @@ func (s *Server) Init() error {
 			}
 			s.startDataCoord()
 			log.Info("DataCoord startup success")
+
+			if s.streamingCoord != nil {
+				s.streamingCoord.Start()
+				log.Info("StreamingCoord stratup successfully at standby mode")
+			}
 			return nil
 		}
 		s.stateCode.Store(commonpb.StateCode_StandBy)
@@ -311,6 +322,10 @@ func (s *Server) Init() error {
 	}
 
 	return s.initDataCoord()
+}
+
+func (s *Server) RegisterStreamingCoordGRPCService(server *grpc.Server) {
+	s.streamingCoord.RegisterGRPCService(server)
 }
 
 func (s *Server) initDataCoord() error {
@@ -334,6 +349,18 @@ func (s *Server) initDataCoord() error {
 		return err
 	}
 
+	// Initialize streaming coordinator.
+	if streamingutil.IsStreamingServiceEnabled() {
+		s.streamingCoord = streamingcoord.NewServerBuilder().
+			WithETCD(s.etcdCli).
+			WithMetaKV(s.kv).
+			WithSession(s.session).Build()
+		if err = s.streamingCoord.Init(context.TODO()); err != nil {
+			return err
+		}
+		log.Info("init streaming coordinator done")
+	}
+
 	s.handler = newServerHandler(s)
 
 	// check whether old node exist, if yes suspend auto balance until all old nodes down
@@ -352,11 +379,10 @@ func (s *Server) initDataCoord() error {
 	log.Info("init service discovery done")
 
 	s.initTaskScheduler(storageCli)
-	if Params.DataCoordCfg.EnableCompaction.GetAsBool() {
-		s.createCompactionHandler()
-		s.createCompactionTrigger()
-		log.Info("init compaction scheduler done")
-	}
+	log.Info("init task scheduler done")
+
+	s.initCompaction()
+	log.Info("init compaction done")
 
 	if err = s.initSegmentManager(); err != nil {
 		return err
@@ -391,6 +417,10 @@ func (s *Server) Start() error {
 	if !s.enableActiveStandBy {
 		s.startDataCoord()
 		log.Info("DataCoord startup successfully")
+		if s.streamingCoord != nil {
+			s.streamingCoord.Start()
+			log.Info("StreamingCoord stratup successfully")
+		}
 	}
 
 	return nil
@@ -398,11 +428,6 @@ func (s *Server) Start() error {
 
 func (s *Server) startDataCoord() {
 	s.taskScheduler.Start()
-	if Params.DataCoordCfg.EnableCompaction.GetAsBool() {
-		s.compactionHandler.start()
-		s.compactionTrigger.start()
-		s.compactionTriggerManager.Start()
-	}
 	s.startServerLoop()
 
 	// http.Register(&http.Handler{
@@ -464,7 +489,7 @@ func (s *Server) initCluster() error {
 	s.sessionManager = NewSessionManagerImpl(withSessionCreator(s.dataNodeCreator))
 
 	var err error
-	s.channelManager, err = NewChannelManagerV2(s.watchClient, s.handler, s.sessionManager, s.allocator, withCheckerV2())
+	s.channelManager, err = NewChannelManager(s.watchClient, s.handler, s.sessionManager, s.allocator, withCheckerV2())
 	if err != nil {
 		return err
 	}
@@ -495,24 +520,6 @@ func (s *Server) SetDataNodeCreator(f func(context.Context, string, int64) (type
 
 func (s *Server) SetIndexNodeCreator(f func(context.Context, string, int64) (types.IndexNodeClient, error)) {
 	s.indexNodeCreator = f
-}
-
-func (s *Server) createCompactionHandler() {
-	s.compactionHandler = newCompactionPlanHandler(s.cluster, s.sessionManager, s.channelManager, s.meta, s.allocator, s.taskScheduler, s.handler)
-	s.compactionTriggerManager = NewCompactionTriggerManager(s.allocator, s.handler, s.compactionHandler, s.meta)
-}
-
-func (s *Server) stopCompactionHandler() {
-	s.compactionHandler.stop()
-	s.compactionTriggerManager.Close()
-}
-
-func (s *Server) createCompactionTrigger() {
-	s.compactionTrigger = newCompactionTrigger(s.meta, s.compactionHandler, s.allocator, s.handler, s.indexEngineVersionManager)
-}
-
-func (s *Server) stopCompactionTrigger() {
-	s.compactionTrigger.stop()
 }
 
 func (s *Server) newChunkManagerFactory() (storage.ChunkManager, error) {
@@ -673,7 +680,44 @@ func (s *Server) initIndexNodeManager() {
 	}
 }
 
+func (s *Server) initCompaction() {
+	s.compactionHandler = newCompactionPlanHandler(s.cluster, s.sessionManager, s.channelManager, s.meta, s.allocator, s.taskScheduler, s.handler)
+	s.compactionTriggerManager = NewCompactionTriggerManager(s.allocator, s.handler, s.compactionHandler, s.meta)
+	s.compactionTrigger = newCompactionTrigger(s.meta, s.compactionHandler, s.allocator, s.handler, s.indexEngineVersionManager)
+}
+
+func (s *Server) stopCompaction() {
+	if s.compactionTrigger != nil {
+		s.compactionTrigger.stop()
+	}
+	if s.compactionTriggerManager != nil {
+		s.compactionTriggerManager.Stop()
+	}
+
+	if s.compactionHandler != nil {
+		s.compactionHandler.stop()
+	}
+}
+
+func (s *Server) startCompaction() {
+	if s.compactionHandler != nil {
+		s.compactionHandler.start()
+	}
+
+	if s.compactionTrigger != nil {
+		s.compactionTrigger.start()
+	}
+
+	if s.compactionTriggerManager != nil {
+		s.compactionTriggerManager.Start()
+	}
+}
+
 func (s *Server) startServerLoop() {
+	if Params.DataCoordCfg.EnableCompaction.GetAsBool() {
+		s.startCompaction()
+	}
+
 	s.serverLoopWg.Add(2)
 	s.startWatchService(s.serverLoopCtx)
 	s.startFlushLoop(s.serverLoopCtx)
@@ -996,16 +1040,19 @@ func (s *Server) Stop() error {
 	s.garbageCollector.close()
 	logutil.Logger(s.ctx).Info("datacoord garbage collector stopped")
 
+	if s.streamingCoord != nil {
+		log.Info("StreamingCoord stoping...")
+		s.streamingCoord.Stop()
+		log.Info("StreamingCoord stopped")
+	}
+
 	s.stopServerLoop()
 
 	s.importScheduler.Close()
 	s.importChecker.Close()
 	s.syncSegmentsScheduler.Stop()
 
-	if Params.DataCoordCfg.EnableCompaction.GetAsBool() {
-		s.stopCompactionTrigger()
-		s.stopCompactionHandler()
-	}
+	s.stopCompaction()
 	logutil.Logger(s.ctx).Info("datacoord compaction stopped")
 
 	s.taskScheduler.Stop()
@@ -1025,7 +1072,6 @@ func (s *Server) Stop() error {
 	s.stopServerLoop()
 	logutil.Logger(s.ctx).Info("datacoord serverloop stopped")
 	logutil.Logger(s.ctx).Warn("datacoord stop successful")
-
 	return nil
 }
 
@@ -1067,6 +1113,14 @@ func (s *Server) stopServerLoop() {
 // loadCollectionFromRootCoord communicates with RootCoord and asks for collection information.
 // collection information will be added to server meta info.
 func (s *Server) loadCollectionFromRootCoord(ctx context.Context, collectionID int64) error {
+	has, err := s.broker.HasCollection(ctx, collectionID)
+	if err != nil {
+		return err
+	}
+	if !has {
+		return merr.WrapErrCollectionNotFound(collectionID)
+	}
+
 	resp, err := s.broker.DescribeCollectionInternal(ctx, collectionID)
 	if err != nil {
 		return err

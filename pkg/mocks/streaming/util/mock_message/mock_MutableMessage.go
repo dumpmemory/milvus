@@ -190,15 +190,15 @@ func (_c *MockMutableMessage_Payload_Call) RunAndReturn(run func() []byte) *Mock
 }
 
 // Properties provides a mock function with given fields:
-func (_m *MockMutableMessage) Properties() message.Properties {
+func (_m *MockMutableMessage) Properties() message.RProperties {
 	ret := _m.Called()
 
-	var r0 message.Properties
-	if rf, ok := ret.Get(0).(func() message.Properties); ok {
+	var r0 message.RProperties
+	if rf, ok := ret.Get(0).(func() message.RProperties); ok {
 		r0 = rf()
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(message.Properties)
+			r0 = ret.Get(0).(message.RProperties)
 		}
 	}
 
@@ -222,12 +222,94 @@ func (_c *MockMutableMessage_Properties_Call) Run(run func()) *MockMutableMessag
 	return _c
 }
 
-func (_c *MockMutableMessage_Properties_Call) Return(_a0 message.Properties) *MockMutableMessage_Properties_Call {
+func (_c *MockMutableMessage_Properties_Call) Return(_a0 message.RProperties) *MockMutableMessage_Properties_Call {
 	_c.Call.Return(_a0)
 	return _c
 }
 
-func (_c *MockMutableMessage_Properties_Call) RunAndReturn(run func() message.Properties) *MockMutableMessage_Properties_Call {
+func (_c *MockMutableMessage_Properties_Call) RunAndReturn(run func() message.RProperties) *MockMutableMessage_Properties_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// TimeTick provides a mock function with given fields:
+func (_m *MockMutableMessage) TimeTick() uint64 {
+	ret := _m.Called()
+
+	var r0 uint64
+	if rf, ok := ret.Get(0).(func() uint64); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Get(0).(uint64)
+	}
+
+	return r0
+}
+
+// MockMutableMessage_TimeTick_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'TimeTick'
+type MockMutableMessage_TimeTick_Call struct {
+	*mock.Call
+}
+
+// TimeTick is a helper method to define mock.On call
+func (_e *MockMutableMessage_Expecter) TimeTick() *MockMutableMessage_TimeTick_Call {
+	return &MockMutableMessage_TimeTick_Call{Call: _e.mock.On("TimeTick")}
+}
+
+func (_c *MockMutableMessage_TimeTick_Call) Run(run func()) *MockMutableMessage_TimeTick_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockMutableMessage_TimeTick_Call) Return(_a0 uint64) *MockMutableMessage_TimeTick_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockMutableMessage_TimeTick_Call) RunAndReturn(run func() uint64) *MockMutableMessage_TimeTick_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// VChannel provides a mock function with given fields:
+func (_m *MockMutableMessage) VChannel() string {
+	ret := _m.Called()
+
+	var r0 string
+	if rf, ok := ret.Get(0).(func() string); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+
+	return r0
+}
+
+// MockMutableMessage_VChannel_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'VChannel'
+type MockMutableMessage_VChannel_Call struct {
+	*mock.Call
+}
+
+// VChannel is a helper method to define mock.On call
+func (_e *MockMutableMessage_Expecter) VChannel() *MockMutableMessage_VChannel_Call {
+	return &MockMutableMessage_VChannel_Call{Call: _e.mock.On("VChannel")}
+}
+
+func (_c *MockMutableMessage_VChannel_Call) Run(run func()) *MockMutableMessage_VChannel_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockMutableMessage_VChannel_Call) Return(_a0 string) *MockMutableMessage_VChannel_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockMutableMessage_VChannel_Call) RunAndReturn(run func() string) *MockMutableMessage_VChannel_Call {
 	_c.Call.Return(run)
 	return _c
 }

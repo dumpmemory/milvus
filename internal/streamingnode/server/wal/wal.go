@@ -10,6 +10,8 @@ import (
 // WAL is the WAL framework interface.
 // !!! Don't implement it directly, implement walimpls.WAL instead.
 type WAL interface {
+	WALName() string
+
 	// Channel returns the channel assignment info of the wal.
 	Channel() types.PChannelInfo
 
@@ -21,6 +23,12 @@ type WAL interface {
 
 	// Read returns a scanner for reading records from the wal.
 	Read(ctx context.Context, deliverPolicy ReadOption) (Scanner, error)
+
+	// Available return a channel that will be closed when the wal is available.
+	Available() <-chan struct{}
+
+	// IsAvailable returns if the wal is available.
+	IsAvailable() bool
 
 	// Close closes the wal instance.
 	Close()

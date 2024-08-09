@@ -463,7 +463,7 @@ func TestCreateCollectionWithInvalidCollectionName(t *testing.T) {
 		common.CheckErr(t, err, false, "collection name should not be empty",
 			"the first character of a collection name must be an underscore or letter",
 			"collection name can only contain numbers, letters and underscores",
-			"the length of a collection name must be less than 255 characters")
+			fmt.Sprintf("the length of a collection name must be less than %d characters", common.MaxCollectionNameLen))
 
 		// collection option has invalid name
 		schema.WithName(collName)
@@ -937,7 +937,7 @@ func TestCreateCollectionInvalid(t *testing.T) {
 	}
 	vecField := entity.NewField().WithName("vec").WithDataType(entity.FieldTypeFloatVector).WithDim(8)
 	mSchemaErrs := []mSchemaErr{
-		{schema: nil, errMsg: "duplicated field name"},
+		{schema: nil, errMsg: "schema does not contain vector field"},
 		{schema: entity.NewSchema().WithField(vecField), errMsg: "collection name should not be empty"},          // no collection name
 		{schema: entity.NewSchema().WithName("aaa").WithField(vecField), errMsg: "primary key is not specified"}, // no pk field
 		{schema: entity.NewSchema().WithName("aaa").WithField(vecField).WithField(entity.NewField()), errMsg: "primary key is not specified"},

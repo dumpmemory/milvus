@@ -5,14 +5,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+
 	"github.com/milvus-io/milvus/client/v2"
 	"github.com/milvus-io/milvus/client/v2/entity"
 	"github.com/milvus-io/milvus/client/v2/index"
 	"github.com/milvus-io/milvus/pkg/log"
 	"github.com/milvus-io/milvus/tests/go_client/common"
 	hp "github.com/milvus-io/milvus/tests/go_client/testcases/helper"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 )
 
 func TestIndexVectorDefault(t *testing.T) {
@@ -24,7 +25,7 @@ func TestIndexVectorDefault(t *testing.T) {
 	prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption())
 
 	// insert
-	ip := hp.NewInsertParams(schema, common.DefaultNb)
+	ip := hp.NewInsertParams(schema)
 	prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption())
 	prepare.FlushData(ctx, t, mc, schema.CollectionName)
 
@@ -39,7 +40,7 @@ func TestIndexVectorDefault(t *testing.T) {
 
 			descIdx, err := mc.DescribeIndex(ctx, client.NewDescribeIndexOption(schema.CollectionName, fieldName))
 			common.CheckErr(t, err, true)
-			require.EqualValues(t, index.NewGenericIndex(fieldName, idx.Params()), descIdx)
+			common.CheckIndex(t, descIdx, index.NewGenericIndex(fieldName, idx.Params()), common.TNewCheckIndexOpt(common.DefaultNb))
 
 			// drop index
 			err = mc.DropIndex(ctx, client.NewDropIndexOption(schema.CollectionName, descIdx.Name()))
@@ -57,7 +58,7 @@ func TestIndexVectorIP(t *testing.T) {
 	prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption())
 
 	// insert
-	ip := hp.NewInsertParams(schema, common.DefaultNb)
+	ip := hp.NewInsertParams(schema)
 	prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption())
 	prepare.FlushData(ctx, t, mc, schema.CollectionName)
 
@@ -73,7 +74,7 @@ func TestIndexVectorIP(t *testing.T) {
 			expIdx := index.NewGenericIndex(fieldName, idx.Params())
 			descIdx, err := mc.DescribeIndex(ctx, client.NewDescribeIndexOption(schema.CollectionName, fieldName))
 			common.CheckErr(t, err, true)
-			require.EqualValues(t, expIdx, descIdx)
+			common.CheckIndex(t, descIdx, expIdx, common.TNewCheckIndexOpt(common.DefaultNb))
 
 			// drop index
 			err = mc.DropIndex(ctx, client.NewDropIndexOption(schema.CollectionName, expIdx.Name()))
@@ -91,7 +92,7 @@ func TestIndexVectorCosine(t *testing.T) {
 	prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption())
 
 	// insert
-	ip := hp.NewInsertParams(schema, common.DefaultNb)
+	ip := hp.NewInsertParams(schema)
 	prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption())
 	prepare.FlushData(ctx, t, mc, schema.CollectionName)
 
@@ -107,7 +108,7 @@ func TestIndexVectorCosine(t *testing.T) {
 			expIdx := index.NewGenericIndex(fieldName, idx.Params())
 			descIdx, err := mc.DescribeIndex(ctx, client.NewDescribeIndexOption(schema.CollectionName, fieldName))
 			common.CheckErr(t, err, true)
-			require.EqualValues(t, expIdx, descIdx)
+			common.CheckIndex(t, descIdx, expIdx, common.TNewCheckIndexOpt(common.DefaultNb))
 
 			// drop index
 			err = mc.DropIndex(ctx, client.NewDropIndexOption(schema.CollectionName, expIdx.Name()))
@@ -125,17 +126,16 @@ func TestIndexAutoFloatVector(t *testing.T) {
 	prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption())
 
 	// insert
-	ip := hp.NewInsertParams(schema, common.DefaultNb)
+	ip := hp.NewInsertParams(schema)
 	prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption())
 	prepare.FlushData(ctx, t, mc, schema.CollectionName)
-
 
 	for _, invalidMt := range hp.SupportBinFlatMetricType {
 		idx := index.NewAutoIndex(invalidMt)
 		_, err := mc.CreateIndex(ctx, client.NewCreateIndexOption(schema.CollectionName, common.DefaultFloatVecFieldName, idx))
 		common.CheckErr(t, err, false, fmt.Sprintf("float vector index does not support metric type: %s", invalidMt))
 	}
-		// auto index with different metric type on float vec
+	// auto index with different metric type on float vec
 	for _, mt := range hp.SupportFloatMetricType {
 		idx := index.NewAutoIndex(mt)
 		indexTask, err := mc.CreateIndex(ctx, client.NewCreateIndexOption(schema.CollectionName, common.DefaultFloatVecFieldName, idx))
@@ -146,7 +146,7 @@ func TestIndexAutoFloatVector(t *testing.T) {
 		expIdx := index.NewGenericIndex(common.DefaultFloatVecFieldName, idx.Params())
 		descIdx, err := mc.DescribeIndex(ctx, client.NewDescribeIndexOption(schema.CollectionName, common.DefaultFloatVecFieldName))
 		common.CheckErr(t, err, true)
-		require.EqualValues(t, expIdx, descIdx)
+		common.CheckIndex(t, descIdx, expIdx, common.TNewCheckIndexOpt(common.DefaultNb))
 
 		// drop index
 		err = mc.DropIndex(ctx, client.NewDropIndexOption(schema.CollectionName, expIdx.Name()))
@@ -163,7 +163,7 @@ func TestIndexAutoBinaryVector(t *testing.T) {
 	prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption())
 
 	// insert
-	ip := hp.NewInsertParams(schema, common.DefaultNb)
+	ip := hp.NewInsertParams(schema)
 	prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption())
 	prepare.FlushData(ctx, t, mc, schema.CollectionName)
 
@@ -187,7 +187,7 @@ func TestIndexAutoBinaryVector(t *testing.T) {
 		expIdx := index.NewGenericIndex(common.DefaultBinaryVecFieldName, idx.Params())
 		descIdx, err := mc.DescribeIndex(ctx, client.NewDescribeIndexOption(schema.CollectionName, common.DefaultBinaryVecFieldName))
 		common.CheckErr(t, err, true)
-		require.EqualValues(t, expIdx, descIdx)
+		common.CheckIndex(t, descIdx, expIdx, common.TNewCheckIndexOpt(common.DefaultNb))
 
 		// drop index
 		err = mc.DropIndex(ctx, client.NewDropIndexOption(schema.CollectionName, expIdx.Name()))
@@ -204,7 +204,7 @@ func TestIndexAutoSparseVector(t *testing.T) {
 	prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption())
 
 	// insert
-	ip := hp.NewInsertParams(schema, common.DefaultNb)
+	ip := hp.NewInsertParams(schema)
 	prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption())
 	prepare.FlushData(ctx, t, mc, schema.CollectionName)
 
@@ -225,7 +225,7 @@ func TestIndexAutoSparseVector(t *testing.T) {
 	expIdx := index.NewGenericIndex(common.DefaultSparseVecFieldName, idx.Params())
 	descIdx, err := mc.DescribeIndex(ctx, client.NewDescribeIndexOption(schema.CollectionName, common.DefaultSparseVecFieldName))
 	common.CheckErr(t, err, true)
-	require.EqualValues(t, expIdx, descIdx)
+	common.CheckIndex(t, descIdx, expIdx, common.TNewCheckIndexOpt(common.DefaultNb))
 
 	// drop index
 	err = mc.DropIndex(ctx, client.NewDropIndexOption(schema.CollectionName, expIdx.Name()))
@@ -241,17 +241,17 @@ func TestCreateAutoIndexAllFields(t *testing.T) {
 	prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption())
 
 	// insert
-	ip := hp.NewInsertParams(schema, common.DefaultNb)
+	ip := hp.NewInsertParams(schema)
 	prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption())
 	prepare.FlushData(ctx, t, mc, schema.CollectionName)
 
 	var expFields []string
 	var idx index.Index
 	for _, field := range schema.Fields {
-		if field.DataType == entity.FieldTypeArray || field.DataType == entity.FieldTypeJSON{
+		if field.DataType == entity.FieldTypeJSON {
 			idx = index.NewAutoIndex(entity.IP)
 			_, err := mc.CreateIndex(ctx, client.NewCreateIndexOption(schema.CollectionName, field.Name, idx))
-			common.CheckErr(t, err, false, fmt.Sprintf("create auto index on %s field is not supported", field.DataType))
+			common.CheckErr(t, err, false, fmt.Sprintf("create auto index on type:%s is not supported", field.DataType))
 		} else {
 			if field.DataType == entity.FieldTypeBinaryVector {
 				idx = index.NewAutoIndex(entity.JACCARD)
@@ -266,7 +266,7 @@ func TestCreateAutoIndexAllFields(t *testing.T) {
 			// describe index
 			descIdx, descErr := mc.DescribeIndex(ctx, client.NewDescribeIndexOption(schema.CollectionName, field.Name))
 			common.CheckErr(t, descErr, true)
-			require.EqualValues(t, index.NewGenericIndex(field.Name, idx.Params()), descIdx)
+			common.CheckIndex(t, descIdx, index.NewGenericIndex(field.Name, idx.Params()), common.TNewCheckIndexOpt(common.DefaultNb))
 		}
 		expFields = append(expFields, field.Name)
 	}
@@ -287,7 +287,7 @@ func TestIndexBinaryFlat(t *testing.T) {
 	prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption())
 
 	// insert
-	ip := hp.NewInsertParams(schema, common.DefaultNb)
+	ip := hp.NewInsertParams(schema)
 	prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption())
 	prepare.FlushData(ctx, t, mc, schema.CollectionName)
 
@@ -302,7 +302,7 @@ func TestIndexBinaryFlat(t *testing.T) {
 		expIdx := index.NewGenericIndex(common.DefaultBinaryVecFieldName, idx.Params())
 		descIdx, err := mc.DescribeIndex(ctx, client.NewDescribeIndexOption(schema.CollectionName, common.DefaultBinaryVecFieldName))
 		common.CheckErr(t, err, true)
-		require.EqualValues(t, expIdx, descIdx)
+		common.CheckIndex(t, descIdx, expIdx, common.TNewCheckIndexOpt(common.DefaultNb))
 
 		// drop index
 		err = mc.DropIndex(ctx, client.NewDropIndexOption(schema.CollectionName, expIdx.Name()))
@@ -318,7 +318,7 @@ func TestIndexBinaryIvfFlat(t *testing.T) {
 	prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption())
 
 	// insert
-	ip := hp.NewInsertParams(schema, common.DefaultNb)
+	ip := hp.NewInsertParams(schema)
 	prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption())
 	prepare.FlushData(ctx, t, mc, schema.CollectionName)
 
@@ -333,7 +333,7 @@ func TestIndexBinaryIvfFlat(t *testing.T) {
 		expIdx := index.NewGenericIndex(common.DefaultBinaryVecFieldName, idx.Params())
 		descIdx, err := mc.DescribeIndex(ctx, client.NewDescribeIndexOption(schema.CollectionName, common.DefaultBinaryVecFieldName))
 		common.CheckErr(t, err, true)
-		require.EqualValues(t, expIdx, descIdx)
+		common.CheckIndex(t, descIdx, expIdx, common.TNewCheckIndexOpt(common.DefaultNb))
 
 		// drop index
 		err = mc.DropIndex(ctx, client.NewDropIndexOption(schema.CollectionName, expIdx.Name()))
@@ -350,7 +350,7 @@ func TestCreateBinaryIndexNotSupportedMetricType(t *testing.T) {
 	prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption())
 
 	// insert
-	ip := hp.NewInsertParams(schema, common.DefaultNb)
+	ip := hp.NewInsertParams(schema)
 	prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption())
 	prepare.FlushData(ctx, t, mc, schema.CollectionName)
 
@@ -415,7 +415,7 @@ func TestCreateTrieScalarIndex(t *testing.T) {
 	prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption())
 
 	// insert
-	ip := hp.NewInsertParams(schema, common.DefaultNb)
+	ip := hp.NewInsertParams(schema)
 	prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption())
 	prepare.FlushData(ctx, t, mc, schema.CollectionName)
 
@@ -433,7 +433,7 @@ func TestCreateTrieScalarIndex(t *testing.T) {
 				expIndex := index.NewGenericIndex(field.Name, idx.Params())
 				descIdx, err := mc.DescribeIndex(ctx, client.NewDescribeIndexOption(schema.CollectionName, field.Name))
 				common.CheckErr(t, err, true)
-				require.EqualValues(t, expIndex, descIdx)
+				common.CheckIndex(t, descIdx, expIndex, common.TNewCheckIndexOpt(common.DefaultNb))
 			} else {
 				_, err := mc.CreateIndex(ctx, client.NewCreateIndexOption(schema.CollectionName, field.Name, idx))
 				common.CheckErr(t, err, false, "TRIE are only supported on varchar field")
@@ -451,7 +451,7 @@ func TestCreateSortedScalarIndex(t *testing.T) {
 	prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption())
 
 	// insert
-	ip := hp.NewInsertParams(schema, common.DefaultNb)
+	ip := hp.NewInsertParams(schema)
 	prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption())
 	prepare.FlushData(ctx, t, mc, schema.CollectionName)
 	prepare.CreateIndex(ctx, t, mc, hp.TNewIndexParams(schema))
@@ -474,7 +474,7 @@ func TestCreateSortedScalarIndex(t *testing.T) {
 				expIndex := index.NewGenericIndex(field.Name, idx.Params())
 				descIdx, err := mc.DescribeIndex(ctx, client.NewDescribeIndexOption(schema.CollectionName, field.Name))
 				common.CheckErr(t, err, true)
-				require.EqualValues(t, expIndex, descIdx)
+				common.CheckIndex(t, descIdx, expIndex, common.TNewCheckIndexOpt(common.DefaultNb))
 			}
 		}
 	}
@@ -501,7 +501,7 @@ func TestCreateInvertedScalarIndex(t *testing.T) {
 	prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption())
 
 	// insert
-	ip := hp.NewInsertParams(schema, common.DefaultNb)
+	ip := hp.NewInsertParams(schema)
 	prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption())
 	prepare.FlushData(ctx, t, mc, schema.CollectionName)
 	prepare.CreateIndex(ctx, t, mc, hp.TNewIndexParams(schema))
@@ -518,7 +518,7 @@ func TestCreateInvertedScalarIndex(t *testing.T) {
 			// describe index
 			expIndex := index.NewGenericIndex(field.Name, idx.Params())
 			_index, _ := mc.DescribeIndex(ctx, client.NewDescribeIndexOption(schema.CollectionName, field.Name))
-			require.EqualValues(t, expIndex, _index)
+			common.CheckIndex(t, _index, expIndex, common.TNewCheckIndexOpt(common.DefaultNb))
 		}
 	}
 	// load -> search and output all fields
@@ -544,13 +544,15 @@ func TestCreateScalarIndexVectorField(t *testing.T) {
 	prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption())
 
 	// insert
-	ip := hp.NewInsertParams(schema, common.DefaultNb)
+	ip := hp.NewInsertParams(schema)
 	prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption())
 	prepare.FlushData(ctx, t, mc, schema.CollectionName)
 
 	for _, idx := range []index.Index{index.NewInvertedIndex(), index.NewSortedIndex(), index.NewTrieIndex()} {
-		for _, fieldName := range []string{common.DefaultFloatVecFieldName, common.DefaultBinaryVecFieldName,
-			common.DefaultBFloat16VecFieldName, common.DefaultFloat16VecFieldName} {
+		for _, fieldName := range []string{
+			common.DefaultFloatVecFieldName, common.DefaultBinaryVecFieldName,
+			common.DefaultBFloat16VecFieldName, common.DefaultFloat16VecFieldName,
+		} {
 			_, err := mc.CreateIndex(ctx, client.NewCreateIndexOption(schema.CollectionName, fieldName, idx))
 			common.CheckErr(t, err, false, "metric type not set for vector index")
 		}
@@ -566,7 +568,7 @@ func TestCreateIndexWithOtherFieldName(t *testing.T) {
 	prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption())
 
 	// insert
-	ip := hp.NewInsertParams(schema, common.DefaultNb)
+	ip := hp.NewInsertParams(schema)
 	prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption())
 	prepare.FlushData(ctx, t, mc, schema.CollectionName)
 
@@ -581,7 +583,7 @@ func TestCreateIndexWithOtherFieldName(t *testing.T) {
 	expIndex := index.NewGenericIndex(common.DefaultBinaryVecFieldName, idx.Params())
 	descIdx, err := mc.DescribeIndex(ctx, client.NewDescribeIndexOption(schema.CollectionName, common.DefaultBinaryVecFieldName))
 	common.CheckErr(t, err, true)
-	require.EqualValues(t, expIndex, descIdx)
+	common.CheckIndex(t, descIdx, expIndex, common.TNewCheckIndexOpt(common.DefaultNb))
 
 	// create index in binary field with default name
 	idxBinary := index.NewBinFlatIndex(entity.JACCARD)
@@ -598,7 +600,7 @@ func TestCreateIndexJsonField(t *testing.T) {
 	prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption())
 
 	// insert
-	ip := hp.NewInsertParams(schema, common.DefaultNb)
+	ip := hp.NewInsertParams(schema)
 	prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption())
 	prepare.FlushData(ctx, t, mc, schema.CollectionName)
 
@@ -607,7 +609,7 @@ func TestCreateIndexJsonField(t *testing.T) {
 	_, err := mc.CreateIndex(ctx, client.NewCreateIndexOption(schema.CollectionName, common.DefaultJSONFieldName, idx).WithIndexName("json_index"))
 	common.CheckErr(t, err, false, "data type should be FloatVector, Float16Vector or BFloat16Vector")
 
-	//create scalar index on json field
+	// create scalar index on json field
 	type scalarIndexError struct {
 		idx    index.Index
 		errMsg string
@@ -632,7 +634,7 @@ func TestCreateUnsupportedIndexArrayField(t *testing.T) {
 	prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption())
 
 	// insert
-	ip := hp.NewInsertParams(schema, common.DefaultNb)
+	ip := hp.NewInsertParams(schema)
 	prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption())
 	prepare.FlushData(ctx, t, mc, schema.CollectionName)
 	type scalarIndexError struct {
@@ -670,7 +672,7 @@ func TestCreateInvertedIndexArrayField(t *testing.T) {
 	prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption())
 
 	// insert
-	ip := hp.NewInsertParams(schema, common.DefaultNb)
+	ip := hp.NewInsertParams(schema)
 	prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption())
 	prepare.FlushData(ctx, t, mc, schema.CollectionName)
 	prepare.CreateIndex(ctx, t, mc, hp.TNewIndexParams(schema))
@@ -708,7 +710,7 @@ func TestCreateIndexWithoutName(t *testing.T) {
 	prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption())
 
 	// insert
-	ip := hp.NewInsertParams(schema, common.DefaultNb)
+	ip := hp.NewInsertParams(schema)
 	prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption())
 	prepare.FlushData(ctx, t, mc, schema.CollectionName)
 
@@ -723,7 +725,7 @@ func TestCreateIndexWithoutName(t *testing.T) {
 	idxDesc, _ := mc.DescribeIndex(ctx, client.NewDescribeIndexOption(schema.CollectionName, common.DefaultFloatVecFieldName))
 	expIndex := index.NewGenericIndex(common.DefaultFloatVecFieldName, idx.Params())
 	require.Equal(t, common.DefaultFloatVecFieldName, idxDesc.Name())
-	require.EqualValues(t, expIndex, idxDesc)
+	common.CheckIndex(t, idxDesc, expIndex, common.TNewCheckIndexOpt(common.DefaultNb))
 }
 
 // test create index on same field twice
@@ -735,20 +737,21 @@ func TestCreateIndexDup(t *testing.T) {
 	prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption())
 
 	// insert
-	ip := hp.NewInsertParams(schema, common.DefaultNb)
+	ip := hp.NewInsertParams(schema)
 	prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption())
 	prepare.FlushData(ctx, t, mc, schema.CollectionName)
 
 	// index dup
 	idxHnsw := index.NewHNSWIndex(entity.L2, 8, 96)
 	idxIvfSq8 := index.NewIvfSQ8Index(entity.L2, 128)
-	_, err := mc.CreateIndex(ctx, client.NewCreateIndexOption(schema.CollectionName, common.DefaultFloatVecFieldName, idxHnsw))
+	idxTask, err := mc.CreateIndex(ctx, client.NewCreateIndexOption(schema.CollectionName, common.DefaultFloatVecFieldName, idxHnsw))
 	common.CheckErr(t, err, true)
+	idxTask.Await(ctx)
 
 	// describe index
 	_index, _ := mc.DescribeIndex(ctx, client.NewDescribeIndexOption(schema.CollectionName, common.DefaultFloatVecFieldName))
 	expIndex := index.NewGenericIndex(common.DefaultFloatVecFieldName, idxHnsw.Params())
-	require.EqualValues(t, expIndex, _index)
+	common.CheckIndex(t, _index, expIndex, common.TNewCheckIndexOpt(common.DefaultNb))
 
 	_, err = mc.CreateIndex(ctx, client.NewCreateIndexOption(schema.CollectionName, common.DefaultFloatVecFieldName, idxIvfSq8))
 	common.CheckErr(t, err, false, "CreateIndex failed: at most one distinct index is allowed per field")
@@ -767,7 +770,7 @@ func TestCreateIndexSparseVectorGeneric(t *testing.T) {
 		prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption().TWithEnableDynamicField(true))
 
 		// insert
-		ip := hp.NewInsertParams(schema, common.DefaultNb)
+		ip := hp.NewInsertParams(schema)
 		prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption().TWithSparseMaxLen(100))
 		prepare.FlushData(ctx, t, mc, schema.CollectionName)
 
@@ -779,7 +782,7 @@ func TestCreateIndexSparseVectorGeneric(t *testing.T) {
 
 		descIdx, err := mc.DescribeIndex(ctx, client.NewDescribeIndexOption(schema.CollectionName, common.DefaultSparseVecFieldName))
 		common.CheckErr(t, err, true)
-		require.EqualValues(t, index.NewGenericIndex(common.DefaultSparseVecFieldName, idx.Params()), descIdx)
+		common.CheckIndex(t, descIdx, index.NewGenericIndex(common.DefaultSparseVecFieldName, idx.Params()), common.TNewCheckIndexOpt(common.DefaultNb))
 	}
 }
 
@@ -795,7 +798,7 @@ func TestCreateIndexSparseVector(t *testing.T) {
 		prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption().TWithEnableDynamicField(true))
 
 		// insert
-		ip := hp.NewInsertParams(schema, common.DefaultNb)
+		ip := hp.NewInsertParams(schema)
 		prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption().TWithSparseMaxLen(100))
 		prepare.FlushData(ctx, t, mc, schema.CollectionName)
 
@@ -806,7 +809,7 @@ func TestCreateIndexSparseVector(t *testing.T) {
 		common.CheckErr(t, err, true)
 		descIdx, err := mc.DescribeIndex(ctx, client.NewDescribeIndexOption(schema.CollectionName, common.DefaultSparseVecFieldName))
 		common.CheckErr(t, err, true)
-		require.EqualValues(t, index.NewGenericIndex(common.DefaultSparseVecFieldName, idx.Params()), descIdx)
+		common.CheckIndex(t, descIdx, index.NewGenericIndex(common.DefaultSparseVecFieldName, idx.Params()), common.TNewCheckIndexOpt(common.DefaultNb))
 	}
 }
 
@@ -818,7 +821,7 @@ func TestCreateSparseIndexInvalidParams(t *testing.T) {
 	prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption().TWithEnableDynamicField(true))
 
 	// insert
-	ip := hp.NewInsertParams(schema, common.DefaultNb)
+	ip := hp.NewInsertParams(schema)
 	prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption().TWithSparseMaxLen(100))
 	prepare.FlushData(ctx, t, mc, schema.CollectionName)
 
@@ -854,7 +857,7 @@ func TestCreateSparseUnsupportedIndex(t *testing.T) {
 	prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption().TWithEnableDynamicField(true))
 
 	// insert
-	ip := hp.NewInsertParams(schema, common.DefaultNb)
+	ip := hp.NewInsertParams(schema)
 	prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption().TWithSparseMaxLen(100))
 	prepare.FlushData(ctx, t, mc, schema.CollectionName)
 
@@ -884,7 +887,7 @@ func TestCreateIndexGeneric(t *testing.T) {
 	prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption().TWithEnableDynamicField(true))
 
 	// insert
-	ip := hp.NewInsertParams(schema, common.DefaultNb)
+	ip := hp.NewInsertParams(schema)
 	prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption().TWithSparseMaxLen(100))
 	prepare.FlushData(ctx, t, mc, schema.CollectionName)
 
@@ -898,7 +901,7 @@ func TestCreateIndexGeneric(t *testing.T) {
 
 		descIdx, err := mc.DescribeIndex(ctx, client.NewDescribeIndexOption(schema.CollectionName, field.Name))
 		common.CheckErr(t, err, true)
-		require.EqualValues(t, index.NewGenericIndex(field.Name, idx.Params()), descIdx)
+		common.CheckIndex(t, descIdx, index.NewGenericIndex(field.Name, idx.Params()), common.TNewCheckIndexOpt(common.DefaultNb))
 	}
 }
 
@@ -990,15 +993,13 @@ func TestCreateIndexInvalidParams(t *testing.T) {
 	}
 
 	// invalid IvfPq params m dim ≡ 0 (mod m), nbits [1, 16]
-	t.Log("https://github.com/milvus-io/milvus/issues/34426")
-	/*for _, invalidNBits := range []int{0, 17} {
+	for _, invalidNBits := range []int{0, 65} {
 		// IvfFlat
 		idxIvfPq := index.NewIvfPQIndex(entity.L2, 128, 8, invalidNBits)
 		_, err := mc.CreateIndex(ctx, client.NewCreateIndexOption(schema.CollectionName, common.DefaultFloatVecFieldName, idxIvfPq))
-		common.CheckErr(t, err, false, "nbits has to be in range [1, 16]")
-	}*/
+		common.CheckErr(t, err, false, "parameter `nbits` out of range, expect range [1,64]")
+	}
 
-	// TODO unclear error message
 	idxIvfPq := index.NewIvfPQIndex(entity.L2, 128, 7, 8)
 	_, err := mc.CreateIndex(ctx, client.NewCreateIndexOption(schema.CollectionName, common.DefaultFloatVecFieldName, idxIvfPq))
 	common.CheckErr(t, err, false, "dimension must be able to be divided by `m`")
@@ -1041,7 +1042,7 @@ func TestCreateIndexAsync(t *testing.T) {
 	prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption().TWithEnableDynamicField(true))
 
 	// insert
-	ip := hp.NewInsertParams(schema, common.DefaultNb)
+	ip := hp.NewInsertParams(schema)
 	prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption().TWithSparseMaxLen(100))
 	prepare.FlushData(ctx, t, mc, schema.CollectionName)
 
@@ -1050,6 +1051,7 @@ func TestCreateIndexAsync(t *testing.T) {
 	common.CheckErr(t, err, true)
 
 	idx, err := mc.DescribeIndex(ctx, client.NewDescribeIndexOption(schema.CollectionName, common.DefaultFloatVecFieldName))
+	common.CheckErr(t, err, true)
 	log.Debug("describe index", zap.Any("descIdx", idx))
 }
 
@@ -1062,7 +1064,7 @@ func TestIndexMultiVectorDupName(t *testing.T) {
 	prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption().TWithEnableDynamicField(true))
 
 	// insert
-	ip := hp.NewInsertParams(schema, common.DefaultNb)
+	ip := hp.NewInsertParams(schema)
 	prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption())
 	prepare.FlushData(ctx, t, mc, schema.CollectionName)
 
@@ -1071,6 +1073,7 @@ func TestIndexMultiVectorDupName(t *testing.T) {
 	idxTask, err := mc.CreateIndex(ctx, client.NewCreateIndexOption(schema.CollectionName, common.DefaultFloatVecFieldName, idx).WithIndexName("index_1"))
 	common.CheckErr(t, err, true)
 	err = idxTask.Await(ctx)
+	common.CheckErr(t, err, true)
 
 	_, err = mc.CreateIndex(ctx, client.NewCreateIndexOption(schema.CollectionName, common.DefaultFloat16VecFieldName, idx).WithIndexName("index_1"))
 	common.CheckErr(t, err, false, "CreateIndex failed: at most one distinct index is allowed per field")
@@ -1089,7 +1092,7 @@ func TestDropIndex(t *testing.T) {
 	prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption().TWithEnableDynamicField(true))
 
 	// insert
-	ip := hp.NewInsertParams(schema, common.DefaultNb)
+	ip := hp.NewInsertParams(schema)
 	prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption())
 	prepare.FlushData(ctx, t, mc, schema.CollectionName)
 
@@ -1099,6 +1102,7 @@ func TestDropIndex(t *testing.T) {
 	idxTask, err := mc.CreateIndex(ctx, client.NewCreateIndexOption(schema.CollectionName, common.DefaultFloatVecFieldName, idx).WithIndexName(idxName))
 	common.CheckErr(t, err, true)
 	err = idxTask.Await(ctx)
+	common.CheckErr(t, err, true)
 
 	// describe index with fieldName -> not found
 	_, errNotFound := mc.DescribeIndex(ctx, client.NewDescribeIndexOption(schema.CollectionName, common.DefaultFloatVecFieldName))
@@ -1106,21 +1110,22 @@ func TestDropIndex(t *testing.T) {
 
 	// describe index with index name -> ok
 	descIdx, err := mc.DescribeIndex(ctx, client.NewDescribeIndexOption(schema.CollectionName, idxName))
-	require.EqualValues(t, index.NewGenericIndex(idxName, idx.Params()), descIdx)
+	common.CheckErr(t, err, true)
+	common.CheckIndex(t, descIdx, index.NewGenericIndex(idxName, idx.Params()), common.TNewCheckIndexOpt(common.DefaultNb))
 
 	// drop index with field name
 	errDrop := mc.DropIndex(ctx, client.NewDropIndexOption(schema.CollectionName, common.DefaultFloatVecFieldName))
 	common.CheckErr(t, errDrop, true)
 	descIdx, err = mc.DescribeIndex(ctx, client.NewDescribeIndexOption(schema.CollectionName, idxName))
 	common.CheckErr(t, err, true)
-	require.EqualValues(t, index.NewGenericIndex(idxName, idx.Params()), descIdx)
+	common.CheckIndex(t, descIdx, index.NewGenericIndex(idxName, idx.Params()), common.TNewCheckIndexOpt(common.DefaultNb))
 
 	// drop index with index name
 	errDrop = mc.DropIndex(ctx, client.NewDropIndexOption(schema.CollectionName, idxName))
 	common.CheckErr(t, errDrop, true)
 	_idx, errDescribe := mc.DescribeIndex(ctx, client.NewDescribeIndexOption(schema.CollectionName, idxName))
 	common.CheckErr(t, errDescribe, false, "index not found")
-	require.Nil(t, _idx)
+	common.CheckIndex(t, _idx, nil, nil)
 }
 
 func TestDropIndexCreateIndexWithIndexName(t *testing.T) {
@@ -1131,7 +1136,7 @@ func TestDropIndexCreateIndexWithIndexName(t *testing.T) {
 	prepare, schema := hp.CollPrepare.CreateCollection(ctx, t, mc, cp, hp.TNewFieldsOption(), hp.TNewSchemaOption().TWithEnableDynamicField(true))
 
 	// insert
-	ip := hp.NewInsertParams(schema, common.DefaultNb)
+	ip := hp.NewInsertParams(schema)
 	prepare.InsertData(ctx, t, mc, ip, hp.TNewDataOption())
 	prepare.FlushData(ctx, t, mc, schema.CollectionName)
 
@@ -1142,23 +1147,26 @@ func TestDropIndexCreateIndexWithIndexName(t *testing.T) {
 	idxTask, err := mc.CreateIndex(ctx, client.NewCreateIndexOption(schema.CollectionName, common.DefaultFloatVecFieldName, idx).WithIndexName(idxName))
 	common.CheckErr(t, err, true)
 	err = idxTask.Await(ctx)
+	common.CheckErr(t, err, true)
 	descIdx, err := mc.DescribeIndex(ctx, client.NewDescribeIndexOption(schema.CollectionName, idxName))
 	common.CheckErr(t, err, true)
-	require.EqualValues(t, index.NewGenericIndex(idxName, idx.Params()), descIdx)
+	common.CheckIndex(t, descIdx, index.NewGenericIndex(idxName, idx.Params()), common.TNewCheckIndexOpt(common.DefaultNb))
 
 	// drop index
 	errDrop := mc.DropIndex(ctx, client.NewDropIndexOption(schema.CollectionName, idxName))
 	common.CheckErr(t, errDrop, true)
 	_idx, errDescribe := mc.DescribeIndex(ctx, client.NewDescribeIndexOption(schema.CollectionName, idxName))
 	common.CheckErr(t, errDescribe, false, "index not found")
-	require.Nil(t, _idx)
+	common.CheckIndex(t, _idx, nil, common.TNewCheckIndexOpt(0).TWithIndexRows(0, 0, 0).
+		TWithIndexState(common.IndexStateIndexStateNone))
 
 	// create new IP index
 	ipIdx := index.NewHNSWIndex(entity.IP, 8, 96)
 	idxTask, err2 := mc.CreateIndex(ctx, client.NewCreateIndexOption(schema.CollectionName, common.DefaultFloatVecFieldName, ipIdx).WithIndexName(idxName))
 	common.CheckErr(t, err2, true)
 	err = idxTask.Await(ctx)
+	common.CheckErr(t, err, true)
 	descIdx2, err2 := mc.DescribeIndex(ctx, client.NewDescribeIndexOption(schema.CollectionName, idxName))
 	common.CheckErr(t, err2, true)
-	require.EqualValues(t, index.NewGenericIndex(idxName, ipIdx.Params()), descIdx2)
+	common.CheckIndex(t, descIdx2, index.NewGenericIndex(idxName, ipIdx.Params()), common.TNewCheckIndexOpt(common.DefaultNb))
 }

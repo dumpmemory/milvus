@@ -24,8 +24,8 @@ import (
 	"time"
 
 	"github.com/cockroachdb/errors"
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/milvus-io/milvus-proto/go-api/v2/commonpb"
 	"github.com/milvus-io/milvus-proto/go-api/v2/milvuspb"
@@ -51,6 +51,7 @@ type collectionMeta struct {
 	physicalChannelNames []string
 	createdTimestamp     uint64
 	createdUtcTimestamp  uint64
+	properties           []*commonpb.KeyValuePair
 }
 
 type partitionMeta struct {
@@ -385,6 +386,7 @@ func (coord *RootCoordMock) CreateCollection(ctx context.Context, req *milvuspb.
 		physicalChannelNames: physicalChannelNames,
 		createdTimestamp:     ts,
 		createdUtcTimestamp:  ts,
+		properties:           req.GetProperties(),
 	}
 
 	coord.partitionMtx.Lock()
@@ -528,6 +530,7 @@ func (coord *RootCoordMock) DescribeCollection(ctx context.Context, req *milvusp
 		PhysicalChannelNames: meta.physicalChannelNames,
 		CreatedTimestamp:     meta.createdUtcTimestamp,
 		CreatedUtcTimestamp:  meta.createdUtcTimestamp,
+		Properties:           meta.properties,
 	}, nil
 }
 
@@ -885,6 +888,10 @@ func (coord *RootCoordMock) ShowSegments(ctx context.Context, req *milvuspb.Show
 		Status:     merr.Success(),
 		SegmentIDs: nil,
 	}, nil
+}
+
+func (coord *RootCoordMock) GetPChannelInfo(ctx context.Context, in *rootcoordpb.GetPChannelInfoRequest, opts ...grpc.CallOption) (*rootcoordpb.GetPChannelInfoResponse, error) {
+	panic("implement me")
 }
 
 func (coord *RootCoordMock) DescribeSegments(ctx context.Context, req *rootcoordpb.DescribeSegmentsRequest, opts ...grpc.CallOption) (*rootcoordpb.DescribeSegmentsResponse, error) {

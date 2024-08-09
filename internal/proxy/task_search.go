@@ -7,10 +7,10 @@ import (
 	"strconv"
 
 	"github.com/cockroachdb/errors"
-	"github.com/golang/protobuf/proto"
 	"github.com/samber/lo"
 	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/milvus-io/milvus-proto/go-api/v2/commonpb"
 	"github.com/milvus-io/milvus-proto/go-api/v2/milvuspb"
@@ -46,6 +46,7 @@ const (
 )
 
 type searchTask struct {
+	baseTask
 	Condition
 	ctx context.Context
 	*internalpb.SearchRequest
@@ -82,6 +83,10 @@ func (t *searchTask) CanSkipAllocTimestamp() bool {
 	var consistencyLevel commonpb.ConsistencyLevel
 	useDefaultConsistency := t.request.GetUseDefaultConsistency()
 	if !useDefaultConsistency {
+		// legacy SDK & resultful behavior
+		if t.request.GetConsistencyLevel() == commonpb.ConsistencyLevel_Strong && t.request.GetGuaranteeTimestamp() > 0 {
+			return true
+		}
 		consistencyLevel = t.request.GetConsistencyLevel()
 	} else {
 		collID, err := globalMetaCache.GetCollectionID(context.Background(), t.request.GetDbName(), t.request.GetCollectionName())
@@ -297,7 +302,7 @@ func (t *searchTask) checkNq(ctx context.Context) (int64, error) {
 	return nq, nil
 }
 
-func setQueryInfoIfMvEnable(queryInfo *planpb.QueryInfo, t *searchTask) error {
+func setQueryInfoIfMvEnable(queryInfo *planpb.QueryInfo, t *searchTask, plan *planpb.PlanNode) error {
 	if t.enableMaterializedView {
 		partitionKeyFieldSchema, err := typeutil.GetPartitionKeyFieldSchema(t.schema.CollectionSchema)
 		if err != nil {
@@ -305,7 +310,26 @@ func setQueryInfoIfMvEnable(queryInfo *planpb.QueryInfo, t *searchTask) error {
 			return err
 		}
 		if typeutil.IsFieldDataTypeSupportMaterializedView(partitionKeyFieldSchema) {
+			collInfo, colErr := globalMetaCache.GetCollectionInfo(t.ctx, t.request.GetDbName(), t.collectionName, t.CollectionID)
+			if colErr != nil {
+				log.Warn("failed to get collection info", zap.Error(colErr))
+				return err
+			}
+
+			if collInfo.partitionKeyIsolation {
+				expr, err := exprutil.ParseExprFromPlan(plan)
+				if err != nil {
+					log.Warn("failed to parse expr from plan during MV", zap.Error(err))
+					return err
+				}
+				err = exprutil.ValidatePartitionKeyIsolation(expr)
+				if err != nil {
+					return err
+				}
+			}
 			queryInfo.MaterializedViewInvolved = true
+		} else {
+			return errors.New("partition key field data type is not supported in materialized view")
 		}
 	}
 	return nil
@@ -343,6 +367,11 @@ func (t *searchTask) initAdvancedSearchRequest(ctx context.Context) error {
 
 		// set PartitionIDs for sub search
 		if t.partitionKeyMode {
+			// isolatioin has tighter constraint, check first
+			mvErr := setQueryInfoIfMvEnable(queryInfo, t, plan)
+			if mvErr != nil {
+				return mvErr
+			}
 			partitionIDs, err2 := t.tryParsePartitionIDsFromPlan(plan)
 			if err2 != nil {
 				return err2
@@ -350,7 +379,6 @@ func (t *searchTask) initAdvancedSearchRequest(ctx context.Context) error {
 			if len(partitionIDs) > 0 {
 				internalSubReq.PartitionIDs = partitionIDs
 				t.partitionIDsSet.Upsert(partitionIDs...)
-				setQueryInfoIfMvEnable(queryInfo, t)
 			}
 		} else {
 			internalSubReq.PartitionIDs = t.SearchRequest.GetPartitionIDs()
@@ -400,13 +428,17 @@ func (t *searchTask) initSearchRequest(ctx context.Context) error {
 	t.SearchRequest.Offset = offset
 
 	if t.partitionKeyMode {
+		// isolatioin has tighter constraint, check first
+		mvErr := setQueryInfoIfMvEnable(queryInfo, t, plan)
+		if mvErr != nil {
+			return mvErr
+		}
 		partitionIDs, err2 := t.tryParsePartitionIDsFromPlan(plan)
 		if err2 != nil {
 			return err2
 		}
 		if len(partitionIDs) > 0 {
 			t.SearchRequest.PartitionIDs = partitionIDs
-			setQueryInfoIfMvEnable(queryInfo, t)
 		}
 	}
 
